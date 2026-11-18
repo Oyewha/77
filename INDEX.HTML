@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MU Stats - Mis Personajes</title>
+<style>
+  *{box-sizing:border-box;font-family:Arial,sans-serif}
+  body{margin:0;background:#111;color:#fff}
+  header{padding:12px;background:#1e1e1e;display:flex;justify-content:space-between;align-items:center}
+  button{background:#ff9d00;color:#000;border:none;padding:10px 14px;border-radius:8px;font-weight:bold;cursor:pointer}
+  button.sec{background:#333;color:#fff}
+  #menu{padding:12px;display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  .card{background:#222;border-radius:12px;overflow:hidden;cursor:pointer;text-align:center;padding-bottom:10px}
+  .card img{width:100%;height:140px;object-fit:cover}
+  /* PANTALLA PERSONAJE */
+  #detail{display:none;padding:12px}
+  .split{display:flex;gap:12px;height:70vh}
+  .left{flex:1;background:#222;border:3px solid #ff9d00;border-radius:12px;overflow:hidden;display:flex;align-items:center;justify-content:center;position:relative}
+  .left img{width:100%;height:100%;object-fit:cover}
+  .left .placeholder{color:#888;text-align:center;padding:20px}
+  .right{flex:1;background:#1e1e1e;border-radius:12px;padding:12px;overflow-y:auto}
+  .stat{background:#2a2a2a;padding:10px;border-radius:10px;margin-bottom:10px}
+  .stat b{color:#ff9d00}
+  .bar{height:10px;background:#444;border-radius:5px;margin-top:6px;overflow:hidden}
+  .bar div{height:100%;background:#ff9d00}
+  input{width:100%;padding:10px;margin:6px 0;border-radius:8px;border:none}
+  .modal{background:#1e1e1e;padding:16px;border-radius:12px;margin:12px}
+  .hidden{display:none}
+</style>
+</head>
+<body>
+
+<header>
+  <b>⚔️ MU STATS</b>
+  <button onclick="showCreate()">+ Nuevo Personaje</button>
+</header>
+
+<!-- MENU PRINCIPAL -->
+<div id="menu"></div>
+
+<!-- CREAR PERSONAJE -->
+<div id="createForm" class="modal hidden">
+  <h3>Crear Personaje</h3>
+  <input id="newName" placeholder="Nombre del personaje Ej: DarkLord99">
+  <input type="file" id="newImg" accept="image/*">
+  <button onclick="createChar()">Crear</button>
+  <button class="sec" onclick="hideCreate()">Cancelar</button>
+</div>
+
+<!-- DETALLE PERSONAJE -->
+<div id="detail">
+  <button class="sec" onclick="backToMenu()">← Volver al menú</button>
+  <h2 id="charName"></h2>
+  <div class="split">
+    <!-- IZQUIERDA: AVATAR -->
+    <div class="left" onclick="document.getElementById('changeImg').click()">
+      <img id="charImg" class="hidden">
+      <div id="charPlaceholder" class="placeholder">Toca para subir foto<br>📷</div>
+      <input type="file" id="changeImg" accept="image/*" class="hidden">
+    </div>
+    <!-- DERECHA: STATS -->
+    <div class="right">
+      <h3>Stats</h3>
+      <div id="statsList"></div>
+      <div class="modal" style="margin:0">
+        <b>Agregar Stat</b>
+        <input id="statName" placeholder="Nombre stat Ej: Fuerza, Agilidad, Vida">
+        <input id="statValue" type="number" placeholder="Valor Ej: 250">
+        <input id="statMax" type="number" placeholder="Max para barra Ej: 1000 (opcional)">
+        <button onclick="addStat()">+ Agregar Stat</button>
+        <button class="sec" onclick="finishStats()">✔ Terminar / Ver Final</button>
+      </div>
+      <br>
+      <button class="sec" onclick="deleteChar()" style="background:#a00;color:#fff;width:100%">Eliminar Personaje</button>
+    </div>
+  </div>
+</div>
+
+<script>
+let chars = JSON.parse(localStorage.getItem('mu_chars') || '[]');
+let currentId = null;
+
+function save(){ localStorage.setItem('mu_chars', JSON.stringify(chars)); renderMenu(); }
+
+function renderMenu(){
+  const m = document.getElementById('menu');
+  document.getElementById('detail').style.display='none';
+  m.innerHTML = chars.length===0 ? '<p style="grid-column:1/3;text-align:center;color:#888">No hay personajes aún. Crea el primero 👆</p>' : '';
+  chars.forEach(c=>{
+    const div=document.createElement('div');
+    div.className='card';
+    div.innerHTML=`<img src="${c.img || 'https://via.placeholder.com/300x200?text=Sin+Foto'}"><b>${c.name}</b><br><small>${c.stats.length} stats</small>`;
+    div.onclick=()=>openChar(c.id);
+    m.appendChild(div);
+  });
+}
+
+function showCreate(){ document.getElementById('createForm').classList.remove('hidden'); }
+function hideCreate(){ document.getElementById('createForm').classList.add('hidden'); }
+
+function createChar(){
+  const name=document.getElementById('newName').value.trim() || 'Sin Nombre';
+  const file=document.getElementById('newImg').files[0];
+  if(file){
+    const r=new FileReader();
+    r.onload=e=>{ pushChar(name, e.target.result); };
+    r.readAsDataURL(file);
+  } else pushChar(name, '');
+}
+function pushChar(name, img){
+  const c={id:Date.now(), name, img, stats:[]};
+  chars.push(c); save(); hideCreate();
+  document.getElementById('newName').value='';
+  openChar(c.id);
+}
+
+function openChar(id){
+  currentId=id;
+  const c=chars.find(x=>x.id===id);
+  document.getElementById('menu').innerHTML='';
+  document.getElementById('createForm').classList.add('hidden');
+  document.getElementById('detail').style.display='block';
+  document.getElementById('charName').innerText=c.name;
+  updateImg();
+  renderStats();
+}
+
+function updateImg(){
+  const c=chars.find(x=>x.id===currentId);
+  const imgEl=document.getElementById('charImg');
+  const ph=document.getElementById('charPlaceholder');
+  if(c.img){ imgEl.src=c.img; imgEl.classList.remove('hidden'); ph.style.display='none'; }
+  else { imgEl.classList.add('hidden'); ph.style.display='block'; }
+}
+
+document.getElementById('changeImg').addEventListener('change', e=>{
+  const f=e.target.files[0]; if(!f) return;
+  const r=new FileReader();
+  r.onload=ev=>{ chars.find(x=>x.id===currentId).img=ev.target.result; save(); updateImg(); };
+  r.readAsDataURL(f);
+});
+
+function renderStats(){
+  const c=chars.find(x=>x.id===currentId);
+  const list=document.getElementById('statsList');
+  list.innerHTML='';
+  c.stats.forEach((s,i)=>{
+    const pct=s.max ? Math.min(100, (s.value/s.max)*100) : 100;
+    list.innerHTML+=`<div class="stat"><b>${s.name}</b> <span style="float:right">${s.value}</span><div class="bar"><div style="width:${pct}%"></div></div><small style="color:#aaa" onclick="removeStat(${i})">❌ borrar</small></div>`;
+  });
+}
+
+function addStat(){
+  const name=document.getElementById('statName').value.trim();
+  const value=parseInt(document.getElementById('statValue').value);
+  const max=parseInt(document.getElementById('statMax').value) || 0;
+  if(!name || isNaN(value)) return alert('Pon nombre y valor po');
+  chars.find(x=>x.id===currentId).stats.push({name,value,max});
+  save(); renderStats();
+  document.getElementById('statName').value=''; document.getElementById('statValue').value=''; document.getElementById('statMax').value='';
+}
+
+function removeStat(i){ chars.find(x=>x.id===currentId).stats.splice(i,1); save(); renderStats(); }
+function finishStats(){ alert('¡Listo! Personaje guardado. Ya quedó como vista final tipo MU.'); backToMenu(); openChar(currentId); }
+function deleteChar(){ if(confirm('¿Borrar personaje?')){ chars=chars.filter(x=>x.id!==currentId); save(); backToMenu(); } }
+function backToMenu(){ document.getElementById('detail').style.display='none'; renderMenu(); }
+
+renderMenu();
+</script>
+</body>
+</html>
